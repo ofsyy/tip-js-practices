@@ -7,7 +7,14 @@ export const demoTasks = [
   { id: 10, title: "Оформить README", completed: true, priority: "medium" },
 ];
 
-// TODO: указать свой вариант и подготовить шесть задач по разделу 7 методички.
-// Пустой массив — заготовка, а не выполненный индивидуальный вариант.
-export const variantNumber = null;
-export const variantTasks = [];
+// Вариант 7: подготовка учебного релиза.
+// По условию варианта изначально выполнены первые 6 задач, то есть все.
+export const variantNumber = 7;
+export const variantTasks = [
+  { id: 11, title: "Зафиксировать список изменений релиза", completed: true, priority: "high" },
+  { id: 23, title: "Обновить номер версии", completed: true, priority: "medium" },
+  { id: 37, title: "Прогнать проверочные сценарии", completed: true, priority: "high" },
+  { id: 41, title: "Обновить инструкцию запуска", completed: true, priority: "medium" },
+  { id: 58, title: "Проверить отсутствие секретов в репозитории", completed: true, priority: "low" },
+  { id: 64, title: "Создать тег релиза в Git", completed: true, priority: "low" },
+];
