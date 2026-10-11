@@ -23,25 +23,87 @@ elements.datasetLabel.textContent = isVariant
   ? `Индивидуальный вариант: ${variantNumber ?? "не указан"}`
   : "Общий контрольный набор";
 
+const FILTERS = ["all", "pending", "completed"];
+const ACTIONS = ["toggle", "delete"];
+
+function showMessage(text) {
+  elements.message.textContent = text;
+}
+
+// Полный список + фильтр → видимая выборка → карточки, сводка, пустое состояние.
+// currentTasks здесь только читается, обработчики не назначаются.
 function renderApp() {
-  // TODO: отобрать видимые задачи; обновить список, общую сводку и пустое состояние.
-  // TODO: для кнопок фильтра обновить is-active и aria-pressed.
-  // Не изменять currentTasks и не добавлять обработчики событий в этой функции.
-  throw new Error("Не реализовано: renderApp");
+  const visibleTasks = getVisibleTasks(currentTasks, currentFilter);
+
+  renderTaskList(elements.list, visibleTasks);
+  renderSummary(elements.summary, currentTasks, visibleTasks.length);
+  renderEmptyState(elements.empty, currentTasks.length, visibleTasks.length);
+
+  for (const button of elements.filters.querySelectorAll("button[data-filter]")) {
+    const isActive = button.dataset.filter === currentFilter;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  }
 }
 
 function handleTaskListClick(event) {
-  // TODO: найти кнопку через closest(), проверить её принадлежность списку.
-  // TODO: распознать toggle/delete; прочитать и проверить числовой id карточки.
-  // TODO: вызвать функцию ПР2, разобрать ok/error, сохранить успешный результат.
-  // TODO: renderApp(), затем restoreTaskFocus(id, action).
-  throw new Error("Не реализовано: handleTaskListClick");
+  if (!(event.target instanceof Element)) return;
+
+  // Нажатие могло прийти со вложенного span, поэтому кнопку ищем через closest.
+  const button = event.target.closest("button[data-action]");
+  if (!button || !elements.list.contains(button)) return;
+
+  const action = button.dataset.action;
+  if (!ACTIONS.includes(action)) return;
+
+  const card = button.closest("li[data-task-id]");
+  if (!card) return;
+
+  // В dataset значение всегда строка. Number("4abc") даёт NaN, а не 4.
+  const rawId = card.dataset.taskId;
+  const id = Number(rawId);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    showMessage(`Ошибка: некорректный идентификатор задачи «${rawId}»`);
+    return;
+  }
+
+  let result;
+  if (action === "toggle") {
+    // Текущий статус берётся из массива, а не из текста кнопки или класса.
+    const task = findTaskById(currentTasks, id);
+    if (task === undefined) {
+      showMessage(`Ошибка: задача с id ${id} не найдена`);
+      return;
+    }
+    result = setTaskCompleted(currentTasks, id, !task.completed);
+  } else {
+    result = removeTask(currentTasks, id);
+  }
+
+  if (!result.ok) {
+    showMessage(`Ошибка: ${result.error}`);
+    return;
+  }
+
+  currentTasks = result.tasks;
+  showMessage("");
+  renderApp();
+  restoreTaskFocus(id, action);
 }
 
 function handleFilterClick(event) {
-  // TODO: найти кнопку фильтра, проверить all/pending/completed.
-  // TODO: изменить только currentFilter, очистить сообщение и вызвать renderApp().
-  throw new Error("Не реализовано: handleFilterClick");
+  if (!(event.target instanceof Element)) return;
+
+  const button = event.target.closest("button[data-filter]");
+  if (!button || !elements.filters.contains(button)) return;
+
+  const filter = button.dataset.filter;
+  if (!FILTERS.includes(filter)) return;
+
+  // Меняется только режим отображения, полный список задач не трогаем.
+  currentFilter = filter;
+  showMessage("");
+  renderApp();
 }
 
 // Готовая вспомогательная функция. Сохраняет понятную позицию клавиатурного фокуса
