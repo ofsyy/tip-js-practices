@@ -347,13 +347,46 @@ check("35. Работа с другим набором, без зависимо�
   assert.deepEqual(tasks, before);
 });
 
-// Три собственных проверки можно добавить здесь, до итогового вывода,
-// либо выполнить отдельно и описать в отчёте. Общие проверки удалять не нужно.
-// Пример формы записи (не готовая проверка задания):
-// check("Собственный случай: ...", () => {
-//   const result = ...;
-//   assert.deepEqual(result, ...);
-// });
+// Собственные проверки.
+
+check("36. Собственный: добавление после удаления того же id", () => {
+  const tasks = fixture();
+  const withoutSeven = expectTasks(removeTask(tasks, 7));
+  // После удаления id 7 снова свободен, новая запись попадает в конец.
+  const next = expectTasks(addTask(withoutSeven, 7, "Вернуть задачу", "low"));
+  assert.deepEqual(next.map((task) => task.id), [1, 4, 10, 7]);
+  assert.deepEqual(next[3], { id: 7, title: "Вернуть задачу", completed: false, priority: "low" });
+  assert.deepEqual(withoutSeven.map((task) => task.id), [1, 4, 10]);
+  assert.deepEqual(tasks, fixture());
+});
+
+check("37. Собственный: изменение первой и последней записи", () => {
+  const tasks = fixture();
+  const step1 = expectTasks(setTaskCompleted(tasks, 1, false));
+  const step2 = expectTasks(renameTask(step1, 10, "Финальный README"));
+  assert.deepEqual(step2[0], { ...tasks[0], completed: false });
+  assert.deepEqual(step2[3], { ...tasks[3], title: "Финальный README" });
+  // Средние записи не менялись, поэтому переиспользуются по ссылке.
+  assert.equal(step2[1], tasks[1]);
+  assert.equal(step2[2], tasks[2]);
+  assert.equal(step1[3].title, "Оформить README");
+  assert.deepEqual(tasks, fixture());
+});
+
+check("38. Собственный: цепочка операций не портит промежуточные версии", () => {
+  const v0 = fixture();
+  const v1 = expectTasks(setTaskCompleted(v0, 4, true));
+  const v2 = expectTasks(renameTask(v1, 4, "Модель готова"));
+  const v3 = expectTasks(removeTask(v2, 1));
+  expectFailure(setTaskCompleted(v3, 1, true));
+  assert.deepEqual(getTaskStats(v1), { total: 4, completed: 3, pending: 1, progress: 75 });
+  assert.equal(findTaskById(v1, 4).title, "Подготовить модель задач");
+  assert.equal(findTaskById(v2, 4).title, "Модель готова");
+  assert.equal(findTaskById(v2, 4).completed, true);
+  assert.deepEqual(v3.map((task) => task.id), [4, 7, 10]);
+  assert.equal(v2.length, 4);
+  assert.deepEqual(v0, fixture());
+});
 
 console.log(`\nПроверок пройдено: ${passed}; не пройдено: ${failed}.`);
 if (failed > 0) {
