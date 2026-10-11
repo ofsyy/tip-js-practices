@@ -93,22 +93,67 @@ export function getTaskStats(tasks) {
 }
 
 export function addTask(tasks, id, title, priority = "medium") {
-  // TODO: проверить данные через createTask(), исключить дублирование id,
-  // вернуть { ok: true, tasks: новыйМассив } без изменения исходного массива.
-  throw new Error("Не реализовано: addTask");
+  const created = createTask(id, title, priority);
+  if (!created.ok) {
+    return { ok: false, error: created.error };
+  }
+
+  if (findTaskById(tasks, id) !== undefined) {
+    return { ok: false, error: `Задача с id ${id} уже существует` };
+  }
+
+  return { ok: true, tasks: [...tasks, created.task] };
 }
 
 export function setTaskCompleted(tasks, id, completed) {
-  // TODO: проверить id и completed, найти задачу, создать обновлённые данные.
-  throw new Error("Не реализовано: setTaskCompleted");
+  const idError = validateId(id);
+  if (idError !== null) {
+    return { ok: false, error: idError };
+  }
+
+  if (typeof completed !== "boolean") {
+    return { ok: false, error: "Статус выполнения должен быть true или false" };
+  }
+
+  if (findTaskById(tasks, id) === undefined) {
+    return { ok: false, error: `Задача с id ${id} не найдена` };
+  }
+
+  // Новый объект создаётся только для выбранной задачи, остальные переиспользуются.
+  const updated = tasks.map((task) => (task.id === id ? { ...task, completed } : task));
+  return { ok: true, tasks: updated };
 }
 
 export function renameTask(tasks, id, title) {
-  // TODO: проверить id и title, изменить только название выбранной задачи.
-  throw new Error("Не реализовано: renameTask");
+  const idError = validateId(id);
+  if (idError !== null) {
+    return { ok: false, error: idError };
+  }
+
+  const titleResult = normalizeTitle(title);
+  if (!titleResult.ok) {
+    return { ok: false, error: titleResult.error };
+  }
+
+  if (findTaskById(tasks, id) === undefined) {
+    return { ok: false, error: `Задача с id ${id} не найдена` };
+  }
+
+  const updated = tasks.map((task) =>
+    task.id === id ? { ...task, title: titleResult.title } : task,
+  );
+  return { ok: true, tasks: updated };
 }
 
 export function removeTask(tasks, id) {
-  // TODO: проверить id, обработать отсутствие задачи, вернуть новый массив.
-  throw new Error("Не реализовано: removeTask");
+  const idError = validateId(id);
+  if (idError !== null) {
+    return { ok: false, error: idError };
+  }
+
+  if (findTaskById(tasks, id) === undefined) {
+    return { ok: false, error: `Задача с id ${id} не найдена` };
+  }
+
+  return { ok: true, tasks: tasks.filter((task) => task.id !== id) };
 }
