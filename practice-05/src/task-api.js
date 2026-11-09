@@ -36,6 +36,56 @@ function isCategory(value) {
   );
 }
 
+// Проверяет фильтры до запроса. Возвращает новый объект только с допустимыми полями.
+function normalizeFilters(filters) {
+  if (filters === null || typeof filters !== "object" || Array.isArray(filters)) {
+    throw new TypeError("Фильтры должны быть обычным объектом");
+  }
+  const query = {};
+  for (const [name, value] of Object.entries(filters)) {
+    if (!ALLOWED_FILTERS.has(name)) {
+      throw new TypeError(`Неизвестный фильтр: ${name}`);
+    }
+    if (value === undefined) continue;
+    if (name === "completed") {
+      if (typeof value !== "boolean") throw new TypeError("completed должен быть true или false");
+      query.completed = value; // строку "false" сделает URLSearchParams
+    } else if (name === "priority") {
+      if (!ALLOWED_PRIORITIES.has(value)) throw new TypeError("priority должен быть low, medium или high");
+      query.priority = value;
+    } else if (name === "categoryId") {
+      if (!isPositiveSafeInteger(value)) throw new TypeError("categoryId должен быть положительным целым числом");
+      query.categoryId = value;
+    } else if (name === "q") {
+      if (typeof value !== "string") throw new TypeError("q должен быть строкой");
+      const q = value.trim();
+      if (q.length > 100) throw new TypeError("q должен быть не длиннее 100 символов");
+      if (q !== "") query.q = q;
+    }
+  }
+  return query;
+}
+
+function hasUniqueIds(items) {
+  return new Set(items.map((item) => item.id)).size === items.length;
+}
+
+function readCollection(payload, isItem, label) {
+  if (payload === null || typeof payload !== "object" || !Array.isArray(payload.data)) {
+    throw invalidResponse(`Ответ ${label}: поле data должно быть массивом.`);
+  }
+  if (!payload.data.every(isItem)) {
+    throw invalidResponse(`Ответ ${label}: элемент не соответствует схеме.`);
+  }
+  if (!hasUniqueIds(payload.data)) {
+    throw invalidResponse(`Ответ ${label}: повторяющиеся id.`);
+  }
+  if (payload.meta === null || typeof payload.meta !== "object" || payload.meta.total !== payload.data.length) {
+    throw invalidResponse(`Ответ ${label}: meta.total не совпадает с длиной data.`);
+  }
+  return payload.data;
+}
+
 // client — объект, созданный createApiClient.
 // Контракт результата:
 // getTasks(filters) -> Promise<{ tasks, meta }>
@@ -43,16 +93,40 @@ function isCategory(value) {
 // getCategories() -> Promise<category[]>
 // loadInitialData(filters) -> Promise<{ tasks, categories, meta }>
 export function createTaskApi(client) {
-  // TODO:
-  // 1. Проверить наличие client.requestJson.
-  // 2. Нормализовать и проверить только completed, priority, categoryId и q.
-  // 3. Реализовать три запроса к tasks/categories.
-  // 4. Проверить форму JSON по isTask/isCategory, включая уникальность id.
-  // 5. Реализовать параллельную загрузку через Promise.all.
-  void client;
-  void ALLOWED_FILTERS;
-  void invalidResponse;
-  void isTask;
-  void isCategory;
-  throw new Error("Не реализовано: createTaskApi");
+  if (!client || typeof client.requestJson !== "function") {
+    throw new TypeError("createTaskApi ожидает клиент с методом requestJson");
+  }
+
+  async function getTasks(filters = {}) {
+    const query = normalizeFilters(filters);
+    const payload = await client.requestJson("/tasks", { query });
+    const tasks = readCollection(payload, isTask, "задач");
+    return { tasks, meta: payload.meta };
+  }
+
+  async function getTaskById(id) {
+    if (!isPositiveSafeInteger(id)) {
+      throw new TypeError("id задачи должен быть положительным целым числом");
+    }
+    const payload = await client.requestJson(`/tasks/${id}`);
+    if (payload === null || typeof payload !== "object" || !isTask(payload.data)) {
+      throw invalidResponse("Ответ задачи не соответствует схеме.");
+    }
+    return payload.data;
+  }
+
+  async function getCategories() {
+    const payload = await client.requestJson("/categories");
+    return readCollection(payload, isCategory, "категорий");
+  }
+
+  async function loadInitialData(filters = {}) {
+    // Оба Promise создаются до общего ожидания — запросы идут одновременно.
+    const tasksPromise = getTasks(filters);
+    const categoriesPromise = getCategories();
+    const [{ tasks, meta }, categories] = await Promise.all([tasksPromise, categoriesPromise]);
+    return { tasks, categories, meta };
+  }
+
+  return { getTasks, getTaskById, getCategories, loadInitialData };
 }
