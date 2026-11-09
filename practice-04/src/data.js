@@ -1,5 +1,5 @@
-// Перед началом ПР4 заменить этот файл собственной проверенной версией из ПР3.
-// Общий контрольный набор не изменяется: он используется в автоматических проверках.
+// Общий контрольный набор. Для своего варианта ниже предусмотрен отдельный массив.
+// Идентификатор задачи не совпадает с её индексом в массиве.
 export const demoTasks = [
   { id: 1, title: "Изучить функции", completed: true, priority: "medium" },
   { id: 4, title: "Подготовить модель задач", completed: false, priority: "high" },
@@ -7,6 +7,14 @@ export const demoTasks = [
   { id: 10, title: "Оформить README", completed: true, priority: "medium" },
 ];
 
-// TODO: перенести номер и шесть задач своего варианта из ПР3.
-export const variantNumber = null;
-export const variantTasks = [];
+// Вариант 7: подготовка учебного релиза.
+// По условию варианта изначально выполнены первые 6 задач, то есть все.
+export const variantNumber = 7;
+export const variantTasks = [
+  { id: 11, title: "Зафиксировать список изменений релиза", completed: true, priority: "high" },
+  { id: 23, title: "Обновить номер версии", completed: true, priority: "medium" },
+  { id: 37, title: "Прогнать проверочные сценарии", completed: true, priority: "high" },
+  { id: 41, title: "Обновить инструкцию запуска", completed: true, priority: "medium" },
+  { id: 58, title: "Проверить отсутствие секретов в репозитории", completed: true, priority: "low" },
+  { id: 64, title: "Создать тег релиза в Git", completed: true, priority: "low" },
+];
