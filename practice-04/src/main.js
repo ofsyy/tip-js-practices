@@ -71,11 +71,27 @@ if (loaded.source === "storage") {
   elements.storageStatus.classList.add("is-warning");
 }
 
+const FILTERS = ["all", "pending", "completed"];
+const ACTIONS = ["toggle", "edit", "delete"];
+
+function showMessage(text) {
+  elements.message.textContent = text;
+}
+
+// Полный список + фильтр → видимая выборка → карточки, сводка, пустое состояние.
+// localStorage здесь не читается и не записывается: отрисовка без побочных эффектов.
 function renderApp() {
-  // TODO: перенести согласованную отрисовку ПР3.
-  // Отобрать задачи, обновить список, сводку, пустое состояние и кнопки фильтра.
-  // Не читать и не записывать localStorage внутри функции отрисовки.
-  throw new Error("Не реализовано: renderApp");
+  const visibleTasks = getVisibleTasks(currentTasks, currentFilter);
+
+  renderTaskList(elements.list, visibleTasks);
+  renderSummary(elements.summary, currentTasks, visibleTasks.length);
+  renderEmptyState(elements.empty, currentTasks.length, visibleTasks.length);
+
+  for (const button of elements.filters.querySelectorAll("button[data-filter]")) {
+    const isActive = button.dataset.filter === currentFilter;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  }
 }
 
 function clearFieldError(name) {
@@ -108,11 +124,39 @@ function showFormErrors(errors) {
 }
 
 function setFormMode(id = null) {
-  // TODO: для null очистить форму и включить режим создания.
-  // Для существующего id заполнить поля, заблокировать изменение id
-  // и включить режим редактирования. Отсутствующий id обработать как отказ.
-  void id;
-  throw new Error("Не реализовано: setFormMode");
+  if (id === null) {
+    // Режим создания: пустая форма, id доступен для ввода.
+    editingId = null;
+    elements.form.reset();
+    clearFormErrors();
+    elements.idInput.disabled = false;
+    elements.formHeading.textContent = "Добавление задачи";
+    elements.formMode.textContent = "Режим создания новой задачи.";
+    elements.submitButton.textContent = "Добавить задачу";
+    elements.cancelButton.hidden = true;
+    elements.idInput.focus();
+    return true;
+  }
+
+  // Режим редактирования: значения берутся из актуальной записи массива.
+  const task = findTaskById(currentTasks, id);
+  if (task === undefined) {
+    showMessage(`Ошибка: задача с id ${id} не найдена, редактирование невозможно`);
+    return false;
+  }
+
+  editingId = task.id;
+  clearFormErrors();
+  elements.idInput.value = String(task.id);
+  elements.titleInput.value = task.title;
+  elements.priorityInput.value = task.priority;
+  elements.idInput.disabled = true;
+  elements.formHeading.textContent = "Редактирование задачи";
+  elements.formMode.textContent = `Изменяется задача с id ${task.id}. Статус выполнения сохранится.`;
+  elements.submitButton.textContent = "Сохранить изменения";
+  elements.cancelButton.hidden = false;
+  elements.titleInput.focus();
+  return true;
 }
 
 function persistCurrentTasks(successMessage) {
@@ -138,34 +182,121 @@ function restoreTaskFocus(id, action) {
 
 function handleFormSubmit(event) {
   event.preventDefault();
-  // TODO: собрать draft из трёх полей и вызвать validateTaskDraft.
-  // При отказе показать ошибки, не менять данные и не обращаться к storage.
-  // В режиме создания вызвать addTask, в режиме редактирования — updateTask.
-  // При успехе сохранить новый массив, выйти из режима редактирования,
-  // записать localStorage и обновить интерфейс.
-  throw new Error("Не реализовано: handleFormSubmit");
+
+  // Значения FormData — строки; disabled-поле id в режиме редактирования отсутствует.
+  const formData = new FormData(elements.form);
+  const draft = {
+    id: formData.get("id"),
+    title: formData.get("title"),
+    priority: formData.get("priority"),
+  };
+
+  const checked = validateTaskDraft(draft, currentTasks, editingId);
+  if (!checked.ok) {
+    showFormErrors(checked.errors);
+    return;
+  }
+
+  const { id, title, priority } = checked.value;
+  const isEditing = editingId !== null;
+  // Сервисная функция повторно проверяет данные: валидация формы не заменяет её.
+  const result = isEditing
+    ? updateTask(currentTasks, id, title, priority)
+    : addTask(currentTasks, id, title, priority);
+
+  if (!result.ok) {
+    elements.formMessage.textContent = `Ошибка: ${result.error}`;
+    return;
+  }
+
+  currentTasks = result.tasks;
+  setFormMode(null);
+  persistCurrentTasks(isEditing ? `Задача ${id} изменена.` : `Задача ${id} добавлена.`);
 }
 
 function handleTaskListClick(event) {
-  // TODO: перенести toggle/delete из ПР3 и добавить действие edit.
-  // edit только переводит форму в режим редактирования и не пишет storage.
-  // После успешных toggle/delete сохранить currentTasks через persistCurrentTasks,
-  // затем вызвать restoreTaskFocus(id, action).
-  void event;
-  throw new Error("Не реализовано: handleTaskListClick");
+  if (!(event.target instanceof Element)) return;
+
+  // Нажатие могло прийти со вложенного span, поэтому кнопку ищем через closest.
+  const button = event.target.closest("button[data-action]");
+  if (!button || !elements.list.contains(button)) return;
+
+  const action = button.dataset.action;
+  if (!ACTIONS.includes(action)) return;
+
+  const card = button.closest("li[data-task-id]");
+  if (!card) return;
+
+  // В dataset значение всегда строка. Number("4abc") даёт NaN, а не 4.
+  const rawId = card.dataset.taskId;
+  const id = Number(rawId);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    showMessage(`Ошибка: некорректный идентификатор задачи «${rawId}»`);
+    return;
+  }
+
+  if (action === "edit") {
+    // Только режим формы: данные и storage не меняются.
+    if (setFormMode(id)) showMessage("");
+    return;
+  }
+
+  let result;
+  if (action === "toggle") {
+    // Текущий статус берётся из массива, а не из текста кнопки или класса.
+    const task = findTaskById(currentTasks, id);
+    if (task === undefined) {
+      showMessage(`Ошибка: задача с id ${id} не найдена`);
+      return;
+    }
+    result = setTaskCompleted(currentTasks, id, !task.completed);
+  } else {
+    result = removeTask(currentTasks, id);
+  }
+
+  if (!result.ok) {
+    showMessage(`Ошибка: ${result.error}`);
+    return;
+  }
+
+  currentTasks = result.tasks;
+  // Удалили редактируемую задачу — форма возвращается в режим создания.
+  if (action === "delete" && editingId === id) {
+    setFormMode(null);
+  }
+  persistCurrentTasks(action === "toggle" ? `Статус задачи ${id} изменён.` : `Задача ${id} удалена.`);
+  restoreTaskFocus(id, action);
 }
 
 function handleFilterClick(event) {
-  // TODO: перенести реализацию ПР3. Выбор фильтра не сохраняется в localStorage.
-  void event;
-  throw new Error("Не реализовано: handleFilterClick");
+  if (!(event.target instanceof Element)) return;
+
+  const button = event.target.closest("button[data-filter]");
+  if (!button || !elements.filters.contains(button)) return;
+
+  const filter = button.dataset.filter;
+  if (!FILTERS.includes(filter)) return;
+
+  // Меняется только режим отображения: модель и localStorage не трогаем.
+  currentFilter = filter;
+  showMessage("");
+  renderApp();
 }
 
 function handleResetClick() {
-  // TODO: удалить только storageKey, восстановить копию initialTasks,
-  // вернуть фильтр all, выйти из редактирования и обновить приложение.
-  // Ошибку removeSavedTasks показать пользователю, исключение не выпускать.
-  throw new Error("Не реализовано: handleResetClick");
+  // Удаляется только ключ текущего набора; clear() не используется.
+  const removed = removeSavedTasks(window.localStorage, storageKey);
+  currentTasks = initialTasks.map((task) => ({ ...task }));
+  currentFilter = "all";
+  setFormMode(null);
+
+  elements.storageStatus.classList.toggle("is-warning", !removed.ok);
+  elements.storageStatus.textContent = removed.ok
+    ? "Сохранённые данные удалены. Используется исходный набор."
+    : removed.error;
+  showMessage(removed.ok ? "Данные сброшены к исходному набору." : `Ошибка сброса: ${removed.error}`);
+  // Исходный набор сразу обратно не сохраняется: ключ остаётся отсутствующим.
+  renderApp();
 }
 
 elements.form.addEventListener("submit", handleFormSubmit);
