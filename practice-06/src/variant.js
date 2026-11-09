@@ -1,4 +1,5 @@
-export const variantNumber = null;
+// Вариант 7 (как в ПР2–ПР5): начальный фильтр q=провер.
+export const variantNumber = 7;
 
 const FILTERS_BY_VARIANT = Object.freeze({
   1: Object.freeze({ completed: false }),
