@@ -8,6 +8,8 @@
     "client": "node src/main.js",
     "example:order": "node examples/event-loop.js",
     "example:fetch": "node examples/fetch-basics.js",
+    "example:parallel": "node examples/parallel-timing.js",
+    "check:own": "node checks/own.checks.js",
     "check:api": "node checks/api-server.checks.js",
     "check:client": "node checks/api-client.checks.js",
     "check:integration": "node checks/integration.checks.js",
